@@ -4,6 +4,7 @@ Copyright (c) 2012, Jared Boone <jared@sharebrained.com>
 Copyright (c) 2014, Youssef Touil <youssef@airspy.com>
 Copyright (c) 2014, Benjamin Vernoux <bvernoux@airspy.com>
 Copyright (c) 2015, Ian Gilmour <ian@sdrsharp.com>
+Copyright (c) 2017, Phil Vachon <phil@security-embedded.com>
 
 All rights reserved.
 
@@ -27,11 +28,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 #include <stdlib.h>
 #include <string.h>
 #include <libusb.h>
-#include <pthread.h>
 
 #include "airspy.h"
-#include "iqconverter_float.h"
-#include "iqconverter_int16.h"
 #include "filters.h"
 
 #ifndef bool
@@ -76,10 +74,6 @@ typedef struct airspy_device
 	airspy_sample_block_cb_fn callback;
 	volatile bool streaming;
 	volatile bool stop_requested;
-	pthread_t transfer_thread;
-	pthread_t consumer_thread;
-	pthread_cond_t consumer_cv;
-	pthread_mutex_t consumer_mp;
 	uint32_t supported_samplerate_count;
 	uint32_t *supported_samplerates;
 	uint32_t transfer_count;
@@ -93,8 +87,6 @@ typedef struct airspy_device
 	void *output_buffer;
 	uint16_t *unpacked_samples;
 	bool packing_enabled;
-	iqconverter_float_t *cnv_f;
-	iqconverter_int16_t *cnv_i;
 	void* ctx;
 	enum airspy_sample_type sample_type;
 } airspy_device_t;
@@ -292,30 +284,6 @@ static int prepare_transfers(airspy_device_t* device, const uint_fast8_t endpoin
 	}
 }
 
-static void convert_samples_int16(uint16_t *src, int16_t *dest, int count)
-{
-	int i;
-	for (i = 0; i < count; i += 4)
-	{
-		dest[i + 0] = (src[i + 0] - 2048) << SAMPLE_SHIFT;
-		dest[i + 1] = (src[i + 1] - 2048) << SAMPLE_SHIFT;
-		dest[i + 2] = (src[i + 2] - 2048) << SAMPLE_SHIFT;
-		dest[i + 3] = (src[i + 3] - 2048) << SAMPLE_SHIFT;
-	}
-}
-
-static void convert_samples_float(uint16_t *src, float *dest, int count)
-{
-	int i;
-	for (i = 0; i < count; i += 4)
-	{
-		dest[i + 0] = (src[i + 0] - 2048) * SAMPLE_SCALE;
-		dest[i + 1] = (src[i + 1] - 2048) * SAMPLE_SCALE;
-		dest[i + 2] = (src[i + 2] - 2048) * SAMPLE_SCALE;
-		dest[i + 3] = (src[i + 3] - 2048) * SAMPLE_SCALE;
-	}
-}
-
 static inline void unpack_samples(uint32_t *input, uint16_t *output, int length)
 {
 	int i, j;
@@ -333,6 +301,7 @@ static inline void unpack_samples(uint32_t *input, uint16_t *output, int length)
 	}
 }
 
+#if 0
 static void* consumer_threadproc(void *arg)
 {
 	int sample_count;
@@ -439,6 +408,7 @@ static void* consumer_threadproc(void *arg)
 
 	return NULL;
 }
+#endif
 
 static void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer)
 {
@@ -452,8 +422,6 @@ static void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer
 
 	if (usb_transfer->status == LIBUSB_TRANSFER_COMPLETED && usb_transfer->actual_length == usb_transfer->length)
 	{
-		pthread_mutex_lock(&device->consumer_mp);
-
 		if (device->received_buffer_count < RAW_BUFFER_COUNT)
 		{
 			temp = device->received_samples_queue[device->received_samples_queue_head];
@@ -466,14 +434,12 @@ static void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer
 			device->received_samples_queue_head = (device->received_samples_queue_head + 1) & (RAW_BUFFER_COUNT - 1);
 			device->received_buffer_count++;
 
-			pthread_cond_signal(&device->consumer_cv);
+            /* Call the RX callback */
 		}
 		else
 		{
 			device->dropped_buffers++;
 		}
-
-		pthread_mutex_unlock(&device->consumer_mp);
 
 		if (libusb_submit_transfer(usb_transfer) != 0)
 		{
@@ -486,6 +452,7 @@ static void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer
 	}
 }
 
+#if 0
 static void* transfer_threadproc(void* arg)
 {
 	airspy_device_t* device = (airspy_device_t*)arg;
@@ -577,6 +544,7 @@ static int create_io_threads(airspy_device_t* device, airspy_sample_block_cb_fn 
 
 	return AIRSPY_SUCCESS;
 }
+#endif
 
 static void airspy_open_exit(airspy_device_t* device)
 {
@@ -852,12 +820,6 @@ static int airspy_open_init(airspy_device_t** device, uint64_t serial_number)
 		return AIRSPY_ERROR_NO_MEM;
 	}
 
-	lib_device->cnv_f = iqconverter_float_create(HB_KERNEL_FLOAT, HB_KERNEL_FLOAT_LEN);
-	lib_device->cnv_i = iqconverter_int16_create(HB_KERNEL_INT16, HB_KERNEL_INT16_LEN);
-
-	pthread_cond_init(&lib_device->consumer_cv, NULL);
-	pthread_mutex_init(&lib_device->consumer_mp, NULL);
-
 	*device = lib_device;
 
 	return AIRSPY_SUCCESS;
@@ -911,13 +873,7 @@ extern "C"
 
 		if (device != NULL)
 		{
-			result = airspy_stop_rx(device);
-
-			iqconverter_float_free(device->cnv_f);
-			iqconverter_int16_free(device->cnv_i);
-
-			pthread_cond_destroy(&device->consumer_cv);
-			pthread_mutex_destroy(&device->consumer_mp);
+			result = airspy_term_rx(device);
 
 			airspy_open_exit(device);
 			free_transfers(device);
@@ -1031,12 +987,12 @@ extern "C"
 		}
 	}
 
-	int ADDCALL airspy_start_rx(airspy_device_t* device, airspy_sample_block_cb_fn callback, void* ctx)
+    /*
+     * Enable receiving with the given Airspy device.
+     */
+	int ADDCALL airspy_init_rx(airspy_device_t* device)
 	{
 		int result;
-
-		iqconverter_float_reset(device->cnv_f);
-		iqconverter_int16_reset(device->cnv_i);
 
 		memset(device->dropped_buffers_queue, 0, RAW_BUFFER_COUNT * sizeof(uint32_t));
 		device->dropped_buffers = 0;
@@ -1049,27 +1005,58 @@ extern "C"
 
 		libusb_clear_halt(device->usb_device, LIBUSB_ENDPOINT_IN | 1);
 
-		result = airspy_set_receiver_mode(device, RECEIVER_MODE_RX);
-		if (result == AIRSPY_SUCCESS)
-		{
-			device->ctx = ctx;
-			result = create_io_threads(device, callback);
-		}
+        device->streaming = true;
 
+        result = prepare_transfers(device, LIBUSB_ENDPOINT_IN | 1, (libusb_transfer_cb_fn)airspy_libusb_transfer_callback);
+        if (result != AIRSPY_SUCCESS) {
+            return result;
+        }
+
+		device->received_samples_queue_head = 0;
+		device->received_samples_queue_tail = 0;
+		device->received_buffer_count = 0;
+
+		result = airspy_set_receiver_mode(device, RECEIVER_MODE_RX);
+
+        /* We're now ready to receive samples, so call do_rx from your worker thread. */
 		return result;
 	}
 
-	int ADDCALL airspy_stop_rx(airspy_device_t* device)
-	{
-		int result1, result2;
-		result1 = kill_io_threads(device);
+    /*
+     * Perform RX. This function blocks until you disable receive, usually on a parent thread.
+     */
+    int ADDCALL airspy_do_rx(airspy_device_t* device, airspy_sample_block_cb_fn callback, void *ctx)
+    {
+        int result = 0;
+	    struct timeval timeout = { 0, 500000 };
 
-		result2 = airspy_set_receiver_mode(device, RECEIVER_MODE_OFF);
-		if (result2 != AIRSPY_SUCCESS)
-		{
-			return result2;
-		}
-		return result1;
+        device->callback = callback;
+        device->ctx = ctx;
+
+        while (device->streaming && !device->stop_requested)
+        {
+            int error = libusb_handle_events_timeout_completed(device->usb_context, &timeout, NULL);
+            if (error < 0)
+            {
+                if (error != LIBUSB_ERROR_INTERRUPTED) {
+                    device->streaming = false;
+                    result = AIRSPY_ERROR_STREAMING_STOPPED;
+                }
+            }
+        }
+
+
+        return result;
+    }
+
+    /*
+     * Terminate sample reception
+     */
+	int ADDCALL airspy_term_rx(airspy_device_t* device)
+	{
+        device->stop_requested = true;
+        cancel_transfers(device);
+		return airspy_set_receiver_mode(device, RECEIVER_MODE_OFF);
 	}
 
 	int ADDCALL airspy_si5351c_read(airspy_device_t* device, uint8_t register_number, uint8_t* value)
@@ -1461,12 +1448,6 @@ extern "C"
 		}
 	}
 
-	int ADDCALL airspy_set_sample_type(struct airspy_device* device, enum airspy_sample_type sample_type)
-	{
-		device->sample_type = sample_type;
-		return AIRSPY_SUCCESS;
-	}
-
 	int ADDCALL airspy_set_freq(airspy_device_t* device, const uint32_t freq_hz)
 	{
 		set_freq_params_t set_freq_params;
@@ -1494,32 +1475,6 @@ extern "C"
 		else {
 			return AIRSPY_SUCCESS;
 		}
-	}
-
-	int ADDCALL airspy_set_conversion_filter_float32(struct airspy_device* device, const float *kernel, const uint32_t len)
-	{
-		if (device->streaming)
-		{
-			return AIRSPY_ERROR_BUSY;
-		}
-
-		iqconverter_float_free(device->cnv_f);
-		device->cnv_f = iqconverter_float_create(kernel, len);
-
-		return AIRSPY_SUCCESS;
-	}
-
-	int ADDCALL airspy_set_conversion_filter_int16(struct airspy_device* device, const int16_t *kernel, const uint32_t len)
-	{
-		if (device->streaming)
-		{
-			return AIRSPY_ERROR_BUSY;
-		}
-
-		iqconverter_int16_free(device->cnv_i);
-		device->cnv_i = iqconverter_int16_create(kernel, len);
-
-		return AIRSPY_SUCCESS;
 	}
 
 	int ADDCALL airspy_set_lna_gain(airspy_device_t* device, uint8_t value)
