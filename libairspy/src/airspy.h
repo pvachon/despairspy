@@ -80,28 +80,13 @@ enum airspy_board_id
 	AIRSPY_BOARD_ID_INVALID = 0xFF,
 };
 
-enum airspy_sample_type
-{
-	AIRSPY_SAMPLE_FLOAT32_IQ = 0,   /* 2 * 32bit float per sample */
-	AIRSPY_SAMPLE_FLOAT32_REAL = 1, /* 1 * 32bit float per sample */
-	AIRSPY_SAMPLE_INT16_IQ = 2,     /* 2 * 16bit int per sample */
-	AIRSPY_SAMPLE_INT16_REAL = 3,   /* 1 * 16bit int per sample */
-	AIRSPY_SAMPLE_UINT16_REAL = 4,  /* 1 * 16bit unsigned int per sample */
-	AIRSPY_SAMPLE_RAW = 5,          /* Raw packed samples from the device */
-	AIRSPY_SAMPLE_END = 6           /* Number of supported sample types */
-};
-
 #define MAX_CONFIG_PAGE_SIZE (0x10000)
 
 struct airspy_device;
 
 typedef struct {
-	struct airspy_device* device;
-	void* ctx;
 	void* samples;
 	int sample_count;
-	uint64_t dropped_samples;
-	enum airspy_sample_type sample_type;
 } airspy_transfer_t, airspy_transfer;
 
 typedef struct {
@@ -115,14 +100,10 @@ typedef struct {
 	uint32_t revision;
 } airspy_lib_version_t;
 
-typedef int (*airspy_sample_block_cb_fn)(airspy_transfer* transfer);
+typedef int (*airspy_sample_block_cb_fn)(struct airspy_device *device, void *ctx, airspy_transfer* transfer);
 
 extern ADDAPI void ADDCALL airspy_lib_version(airspy_lib_version_t* lib_version);
-/* airspy_init() deprecated */
-extern ADDAPI int ADDCALL airspy_init(void);
-/* airspy_exit() deprecated */
-extern ADDAPI int ADDCALL airspy_exit(void);
- 
+
 extern ADDAPI int ADDCALL airspy_open_sn(struct airspy_device** device, uint64_t serial_number);
 extern ADDAPI int ADDCALL airspy_open(struct airspy_device** device);
 extern ADDAPI int ADDCALL airspy_close(struct airspy_device* device);
@@ -131,9 +112,6 @@ extern ADDAPI int ADDCALL airspy_get_samplerates(struct airspy_device* device, u
 
 /* Parameter samplerate can be either the index of a samplerate or directly its value in Hz within the list returned by airspy_get_samplerates() */
 extern ADDAPI int ADDCALL airspy_set_samplerate(struct airspy_device* device, uint32_t samplerate);
-
-extern ADDAPI int ADDCALL airspy_set_conversion_filter_float32(struct airspy_device* device, const float *kernel, const uint32_t len);
-extern ADDAPI int ADDCALL airspy_set_conversion_filter_int16(struct airspy_device* device, const int16_t *kernel, const uint32_t len);
 
 extern ADDAPI int ADDCALL airspy_init_rx(struct airspy_device* device);
 extern ADDAPI int ADDCALL airspy_do_rx(struct airspy_device* device, airspy_sample_block_cb_fn callback, void* rx_ctx);
@@ -169,8 +147,6 @@ extern ADDAPI int ADDCALL airspy_board_id_read(struct airspy_device* device, uin
 extern ADDAPI int ADDCALL airspy_version_string_read(struct airspy_device* device, char* version, uint8_t length);
 
 extern ADDAPI int ADDCALL airspy_board_partid_serialno_read(struct airspy_device* device, airspy_read_partid_serialno_t* read_partid_serialno);
-
-extern ADDAPI int ADDCALL airspy_set_sample_type(struct airspy_device* device, enum airspy_sample_type sample_type);
 
 /* Parameter freq_hz shall be between 24000000(24MHz) and 1750000000(1.75GHz) */
 extern ADDAPI int ADDCALL airspy_set_freq(struct airspy_device* device, const uint32_t freq_hz);

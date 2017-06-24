@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 
 #include "iqconverter_int16.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,19 +45,32 @@ THE SOFTWARE.
 #define SIZE_FACTOR 16
 #define DEFAULT_ALIGNMENT 16
 
-iqconverter_int16_t *iqconverter_int16_create(const int16_t *hb_kernel, int len)
+#define SAMPLE_RESOLUTION 12
+#define SAMPLE_ENCAPSULATION 16
+
+#define SAMPLE_SHIFT (SAMPLE_ENCAPSULATION - SAMPLE_RESOLUTION)
+
+int iqconverter_int16_init(iqconverter_int16_t *cnv, const int16_t *hb_kernel, int len)
 {
+    int ret = 0;
 	int i;
 	size_t buffer_size;
-	iqconverter_int16_t *cnv = (iqconverter_int16_t *) _aligned_malloc(sizeof(iqconverter_int16_t), DEFAULT_ALIGNMENT);
 
 	cnv->len = len / 2 + 1;
 
 	buffer_size = cnv->len * sizeof(int32_t);
 
-	cnv->fir_kernel = (int32_t *) _aligned_malloc(buffer_size, DEFAULT_ALIGNMENT);
-	cnv->fir_queue = (int32_t *) _aligned_malloc(buffer_size * SIZE_FACTOR, DEFAULT_ALIGNMENT);
-	cnv->delay_line = (int16_t *) _aligned_malloc(buffer_size / 4, DEFAULT_ALIGNMENT);
+	if (NULL == (cnv->fir_kernel = (int32_t *) _aligned_malloc(buffer_size, DEFAULT_ALIGNMENT))) {
+        goto done;
+    }
+
+	if (NULL == (cnv->fir_queue = (int32_t *) _aligned_malloc(buffer_size * SIZE_FACTOR, DEFAULT_ALIGNMENT))) {
+        goto done;
+    }
+
+	if (NULL == (cnv->delay_line = (int16_t *) _aligned_malloc(buffer_size / 4, DEFAULT_ALIGNMENT))) {
+        goto done;
+    }
 
 	iqconverter_int16_reset(cnv);
 
@@ -65,7 +79,20 @@ iqconverter_int16_t *iqconverter_int16_create(const int16_t *hb_kernel, int len)
 		cnv->fir_kernel[i] = hb_kernel[i * 2];
 	}
 
-	return cnv;
+done:
+    if (0 != ret) {
+        if (NULL != cnv->fir_kernel) {
+            _aligned_free(cnv->fir_kernel);
+        }
+        if (NULL != cnv->fir_queue) {
+            _aligned_free(cnv->fir_queue);
+        }
+
+        if (NULL != cnv->delay_line) {
+            _aligned_free(cnv->delay_line);
+        }
+    }
+	return ret;
 }
 
 void iqconverter_int16_free(iqconverter_int16_t *cnv)
@@ -73,7 +100,6 @@ void iqconverter_int16_free(iqconverter_int16_t *cnv)
 	_aligned_free(cnv->fir_kernel);
 	_aligned_free(cnv->fir_queue);
 	_aligned_free(cnv->delay_line);
-	_aligned_free(cnv);
 }
 
 void iqconverter_int16_reset(iqconverter_int16_t *cnv)
@@ -106,7 +132,7 @@ static void fir_interleaved(iqconverter_int16_t *cnv, int16_t *samples, int len)
 		queue[0] = samples[i];
 
 		acc = 0;
-		
+
 		// Auto vectorization works on VS2012, VS2013 and GCC
 		for (j = 0; j < fir_len; j++)
 		{
@@ -131,7 +157,7 @@ static void delay_interleaved(iqconverter_int16_t *cnv, int16_t *samples, int le
 	int index;
 	int half_len;
 	int16_t res;
-	
+
 	half_len = cnv->len >> 1;
 	index = cnv->delay_index;
 
@@ -146,31 +172,54 @@ static void delay_interleaved(iqconverter_int16_t *cnv, int16_t *samples, int le
 			index = 0;
 		}
 	}
-	
+
 	cnv->delay_index = index;
 }
 
-static void remove_dc(iqconverter_int16_t *cnv, int16_t *samples, int len)
+/*
+ * Given a sample, process an iteration of the DC removal IIR. 
+ */
+static inline
+int16_t _remove_dc_sample(uint16_t sample,
+        int32_t old_e, int16_t old_x, int16_t old_y,
+        int32_t *new_e, int16_t *new_x, int16_t *new_y)
+{
+	int32_t u;
+	int16_t x, y, w, s;
+
+    x = (sample - 2048) << SAMPLE_SHIFT;
+    w = x - old_x;
+    u = old_e + (int32_t) old_y * 32100;
+    s = u >> 15;
+    y = w + s;
+    *new_e = u - (s << 15);
+    *new_x = x;
+    *new_y = y;
+    return y;
+}
+
+/**
+ * Apply the DC blocker filter to the input buffer
+ */
+static
+void remove_dc(iqconverter_int16_t *cnv, uint16_t *samples_raw, int len)
 {
 	int i;
-	int32_t u, old_e;
-	int16_t x, y, w, s, old_x, old_y;
+	int32_t old_e;
+	int16_t old_x, old_y;
+    int16_t *samples = (int16_t *)samples_raw;
 
 	old_x = cnv->old_x;
 	old_y = cnv->old_y;
 	old_e = cnv->old_e;
 
-	for (i = 0; i < len; i++)
+    /* Apply the DC blocker filter, and update the output samples for I/Q calculation */
+	for (i = 0; i < len; i += 4)
 	{
-		x = samples[i];
-		w = x - old_x;
-		u = old_e + (int32_t) old_y * 32100;
-		s = u >> 15;
-		y = w + s;
-		old_e = u - (s << 15);
-		old_x = x;
-		old_y = y;		
-		samples[i] = y;
+        samples[i + 0] = -_remove_dc_sample(samples_raw[i + 0], old_e, old_x, old_y, &old_e, &old_x, &old_y);
+        samples[i + 1] = -_remove_dc_sample(samples_raw[i + 1], old_e, old_x, old_y, &old_e, &old_x, &old_y) >> 1;
+        samples[i + 2] = _remove_dc_sample(samples_raw[i + 2], old_e, old_x, old_y, &old_e, &old_x, &old_y);
+        samples[i + 3] = _remove_dc_sample(samples_raw[i + 3], old_e, old_x, old_y, &old_e, &old_x, &old_y) >> 1;
 	}
 
 	cnv->old_x = old_x;
@@ -180,22 +229,13 @@ static void remove_dc(iqconverter_int16_t *cnv, int16_t *samples, int len)
 
 static void translate_fs_4(iqconverter_int16_t *cnv, int16_t *samples, int len)
 {
-	int i;
-
-	for (i = 0; i < len; i += 4)
-	{
-		samples[i + 0] = -samples[i + 0];
-		samples[i + 1] = -samples[i + 1] >> 1;
-		//samples[i + 2] = samples[i + 2];
-		samples[i + 3] = samples[i + 3] >> 1;
-	}
-
 	fir_interleaved(cnv, samples, len);
 	delay_interleaved(cnv, samples + 1, len);
 }
 
-void iqconverter_int16_process(iqconverter_int16_t *cnv, int16_t *samples, int len)
+void iqconverter_int16_process(iqconverter_int16_t *cnv, uint16_t *samples, int len)
 {
 	remove_dc(cnv, samples, len);
-	translate_fs_4(cnv, samples, len);
+	translate_fs_4(cnv, (int16_t *)samples, len);
 }
+

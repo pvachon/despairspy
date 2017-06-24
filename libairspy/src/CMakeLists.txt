@@ -26,8 +26,8 @@
 # Based heavily upon the libftdi cmake setup.
 
 # Targets
-set(c_sources ${CMAKE_CURRENT_SOURCE_DIR}/airspy.c CACHE INTERNAL "List of C sources")
-set(c_headers ${CMAKE_CURRENT_SOURCE_DIR}/airspy.h ${CMAKE_CURRENT_SOURCE_DIR}/airspy_commands.h ${CMAKE_CURRENT_SOURCE_DIR}/filters.h CACHE INTERNAL "List of C headers")
+set(c_sources ${CMAKE_CURRENT_SOURCE_DIR}/airspy.c ${CMAKE_CURRENT_SOURCE_DIR}/iqconverter_int16.c CACHE INTERNAL "List of C sources")
+set(c_headers ${CMAKE_CURRENT_SOURCE_DIR}/airspy.h ${CMAKE_CURRENT_SOURCE_DIR}/airspy_commands.h ${CMAKE_CURRENT_SOURCE_DIR}/filters.h ${CMAKE_CURRENT_SOURCE_DIR}/iqconverter_int16.h CACHE INTERNAL "List of C headers")
 
 if(MINGW)
     # This gets us DLL resource information when compiling on MinGW.

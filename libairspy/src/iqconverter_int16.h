@@ -37,9 +37,9 @@ typedef struct {
 	int16_t *delay_line;
 } iqconverter_int16_t;
 
-iqconverter_int16_t *iqconverter_int16_create(const int16_t *hb_kernel, int len);
+int iqconverter_int16_init(iqconverter_int16_t *cnv, const int16_t *hb_kernel, int len);
 void iqconverter_int16_free(iqconverter_int16_t *cnv);
 void iqconverter_int16_reset(iqconverter_int16_t *cnv);
-void iqconverter_int16_process(iqconverter_int16_t *cnv, int16_t *samples, int len);
+void iqconverter_int16_process(iqconverter_int16_t *cnv, uint16_t *samples, int len);
 
 #endif // IQCONVERTER_INT16_H
