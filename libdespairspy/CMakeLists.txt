@@ -22,7 +22,7 @@
 # Based heavily upon the libftdi cmake setup.
 
 cmake_minimum_required(VERSION 2.8)
-project(libairspy C)
+project(libdespairspy C)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/airspy.h AIRSPY_H_CONTENTS)
 
 STRING(REGEX MATCH "\#define AIRSPY_VER_MAJOR[ \t]+([0-9]+)" AIRSPY_VER_MJ ${AIRSPY_H_CONTENTS})
@@ -38,13 +38,13 @@ set(AIRSPY_VER_MAJOR ${AIRSPY_VER_MJ})
 set(AIRSPY_VER_MINOR ${AIRSPY_VER_MI})
 set(AIRSPY_VER_REVISION ${AIRSPY_VER_RE})
 
-set(PACKAGE libairspy)
+set(PACKAGE libdespairspy)
 set(VERSION_STRING ${AIRSPY_VER_MAJOR}.${AIRSPY_VER_MINOR})
 set(VERSION ${VERSION_STRING})
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../cmake/modules)
-set(CMAKE_C_FLAGS_RELEASE "-O3")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -g")
 set(CMAKE_C_FLAGS_DEBUG "-O0 -g")
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 if(APPLE)
     set(GR_LIBRARY_DIR "lib")
@@ -105,12 +105,12 @@ set(libdir \${exec_prefix}/lib${LIB_SUFFIX})
 set(includedir \${prefix}/include)
 
 CONFIGURE_FILE(
-    ${CMAKE_CURRENT_SOURCE_DIR}/libairspy.pc.in
-    ${CMAKE_CURRENT_BINARY_DIR}/libairspy.pc
+    ${CMAKE_CURRENT_SOURCE_DIR}/libdespairspy.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libdespairspy.pc
 @ONLY)
 
 INSTALL(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/libairspy.pc
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/libdespairspy.pc
     DESTINATION lib${LIB_SUFFIX}/pkgconfig
 )
 

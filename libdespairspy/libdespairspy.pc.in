@@ -3,9 +3,9 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: AirSpy Library
+Name: De-threaded AirSpy Library
 Description: C Utility Library
 Version: @VERSION@
-Cflags: -I${includedir}/libairspy/ @AIRSPY_PC_CFLAGS@
-Libs: -L${libdir} -lairspy
+Cflags: -I${includedir}/libdespairspy/ @AIRSPY_PC_CFLAGS@
+Libs: -L${libdir} -ldespairspy
 Libs.private: @AIRSPY_PC_LIBS@

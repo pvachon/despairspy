@@ -47,29 +47,29 @@ if(MINGW)
 endif(MINGW)
 
 # Dynamic library
-add_library(airspy SHARED ${c_sources} ${AIRSPY_DLL_SRCS})
-set_target_properties(airspy PROPERTIES VERSION ${AIRSPY_VER_MAJOR}.${AIRSPY_VER_MINOR}.${AIRSPY_VER_REVISION})
-set_target_properties(airspy PROPERTIES SOVERSION 0)
+add_library(despairspy SHARED ${c_sources} ${AIRSPY_DLL_SRCS})
+set_target_properties(despairspy PROPERTIES VERSION ${AIRSPY_VER_MAJOR}.${AIRSPY_VER_MINOR}.${AIRSPY_VER_REVISION})
+set_target_properties(despairspy PROPERTIES SOVERSION 0)
 
 if( ${WIN32} )
-set_target_properties(airspy PROPERTIES
+set_target_properties(despairspy PROPERTIES
                       RUNTIME_OUTPUT_DIRECTORY_RELEASE ../../airspy-tools/src
                       )
 endif( ${WIN32} )
 
 # Static library
-add_library(airspy-static STATIC ${c_sources})
+add_library(despairspy-static STATIC ${c_sources})
 if(MSVC)
-	set_target_properties(airspy-static PROPERTIES OUTPUT_NAME "airspy_static")
+	set_target_properties(despairspy-static PROPERTIES OUTPUT_NAME "airspy_static")
 else()
-	set_target_properties(airspy-static PROPERTIES OUTPUT_NAME "airspy")
+	set_target_properties(despairspy-static PROPERTIES OUTPUT_NAME "airspy")
 endif()
 
-set_target_properties(airspy PROPERTIES CLEAN_DIRECT_OUTPUT 1)
-set_target_properties(airspy-static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+set_target_properties(despairspy PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+set_target_properties(despairspy-static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
 # Dependencies
-target_link_libraries(airspy ${LIBUSB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(despairspy ${LIBUSB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
    
 # For cygwin just force UNIX OFF and WIN32 ON
 if( ${CYGWIN} )
@@ -78,11 +78,11 @@ if( ${CYGWIN} )
 endif( ${CYGWIN} )
 
 if( ${UNIX} )
-   install(TARGETS airspy
+   install(TARGETS despairspy
            LIBRARY DESTINATION lib${LIB_SUFFIX}
            COMPONENT sharedlibs
            )
-   install(TARGETS airspy-static
+   install(TARGETS despairspy-static
            ARCHIVE DESTINATION lib${LIB_SUFFIX}
            COMPONENT staticlibs
            )
@@ -93,11 +93,11 @@ if( ${UNIX} )
 endif( ${UNIX} )
 
 if( ${WIN32} )
-   install(TARGETS airspy
+   install(TARGETS despairspy
            DESTINATION bin
            COMPONENT sharedlibs
            )
-   install(TARGETS airspy-static
+   install(TARGETS despairspy-static
            DESTINATION bin
            COMPONENT staticlibs
            )

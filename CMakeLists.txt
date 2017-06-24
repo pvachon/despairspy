@@ -8,7 +8,7 @@ if(MSVC11)
     add_definitions(-Dstrtoull=_strtoui64)
 endif(MSVC11)
 
-add_subdirectory(libairspy)
+add_subdirectory(libdespairspy)
 add_subdirectory(airspy-tools)
 
 ########################################################################
