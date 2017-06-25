@@ -315,7 +315,8 @@ void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer)
         iqconverter_int16_process(&device->conv, (uint16_t *)usb_transfer->buffer, device->buffer_size / 2);
 
         transfer.samples = usb_transfer->buffer;
-        transfer.sample_count = device->buffer_size / 2;
+        /* Samples are 2 bytes each, I/Q */
+        transfer.sample_count = device->buffer_size / (sizeof(uint16_t) * 2);
 
         /* Call the RX callback */
         if (0 != device->callback(device, device->ctx, &transfer)) {
