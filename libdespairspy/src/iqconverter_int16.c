@@ -46,7 +46,7 @@ THE SOFTWARE.
 #define DEFAULT_ALIGNMENT 16
 
 #define SAMPLE_RESOLUTION 12
-#define SAMPLE_ENCAPSULATION 16
+#define SAMPLE_ENCAPSULATION 15
 
 #define SAMPLE_SHIFT (SAMPLE_ENCAPSULATION - SAMPLE_RESOLUTION)
 
@@ -180,7 +180,7 @@ static void delay_interleaved(iqconverter_int16_t *cnv, int16_t *samples, int le
  * Given a sample, process an iteration of the DC removal IIR. 
  */
 static inline
-int16_t _remove_dc_sample(uint16_t sample,
+int16_t _remove_dc_sample(int32_t sample,
         int32_t old_e, int16_t old_x, int16_t old_y,
         int32_t *new_e, int16_t *new_x, int16_t *new_y)
 {
@@ -216,10 +216,14 @@ void remove_dc(iqconverter_int16_t *cnv, uint16_t *samples_raw, int len)
     /* Apply the DC blocker filter, and update the output samples for I/Q calculation */
 	for (i = 0; i < len; i += 4)
 	{
-        samples[i + 0] = -_remove_dc_sample(samples_raw[i + 0], old_e, old_x, old_y, &old_e, &old_x, &old_y);
-        samples[i + 1] = -_remove_dc_sample(samples_raw[i + 1], old_e, old_x, old_y, &old_e, &old_x, &old_y) >> 1;
-        samples[i + 2] = _remove_dc_sample(samples_raw[i + 2], old_e, old_x, old_y, &old_e, &old_x, &old_y);
-        samples[i + 3] = _remove_dc_sample(samples_raw[i + 3], old_e, old_x, old_y, &old_e, &old_x, &old_y) >> 1;
+        samples[i + 0] =
+            -_remove_dc_sample(samples_raw[i + 0], old_e, old_x, old_y, &old_e, &old_x, &old_y);
+        samples[i + 1] =
+            (-_remove_dc_sample(samples_raw[i + 1], old_e, old_x, old_y, &old_e, &old_x, &old_y)) >> 1;
+        samples[i + 2] =
+            _remove_dc_sample(samples_raw[i + 2], old_e, old_x, old_y, &old_e, &old_x, &old_y);
+        samples[i + 3] =
+            _remove_dc_sample(samples_raw[i + 3], old_e, old_x, old_y, &old_e, &old_x, &old_y) >> 1;
 	}
 
 	cnv->old_x = old_x;

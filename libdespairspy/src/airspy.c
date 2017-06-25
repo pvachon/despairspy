@@ -50,12 +50,6 @@ typedef int bool;
 #define TO_LE(x) x
 #endif
 
-#define SAMPLE_RESOLUTION 12
-#define SAMPLE_ENCAPSULATION 16
-
-#define SAMPLE_SHIFT (SAMPLE_ENCAPSULATION - SAMPLE_RESOLUTION)
-#define SAMPLE_SCALE (1.0f / (1 << (15 - SAMPLE_SHIFT)))
-
 #define SERIAL_NUMBER_UNUSED (0ULL)
 
 #define USB_PRODUCT_ID (2)
@@ -90,10 +84,6 @@ typedef struct airspy_device
 
 static const uint16_t airspy_usb_vid = 0x1d50;
 static const uint16_t airspy_usb_pid = 0x60a1;
-
-#define STR_PRODUCT_AIRSPY_SIZE (6)
-static const char str_product_airspy[STR_PRODUCT_AIRSPY_SIZE] =
-{ 'A', 'I', 'R', 'S', 'P', 'Y' };
 
 #define STR_PREFIX_SERIAL_AIRSPY_SIZE (10)
 static const char str_prefix_serial_airspy[STR_PREFIX_SERIAL_AIRSPY_SIZE] =
@@ -312,7 +302,8 @@ void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer)
     {
         airspy_transfer_t transfer;
 
-        iqconverter_int16_process(&device->conv, (uint16_t *)usb_transfer->buffer, device->buffer_size / 2);
+        iqconverter_int16_process(&device->conv, (uint16_t *)usb_transfer->buffer,
+                device->buffer_size / sizeof(uint16_t));
 
         transfer.samples = usb_transfer->buffer;
         /* Samples are 2 bytes each, I/Q */
