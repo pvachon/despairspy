@@ -1,4 +1,4 @@
-#top dir cmake project for libairspy + airspy-tools
+#top dir cmake project for libdespairspy
 
 cmake_minimum_required(VERSION 2.8)
 project (airspy_all)
@@ -9,7 +9,6 @@ if(MSVC11)
 endif(MSVC11)
 
 add_subdirectory(libdespairspy)
-add_subdirectory(airspy-tools)
 
 ########################################################################
 # Create uninstall target
@@ -33,14 +32,12 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING)
  if (NOT DEFINED LIBUSB_LIBRARIES)
  configure_file(
      ${CMAKE_CURRENT_BINARY_DIR}/../libs_win32/libusb-1.0.dll
-     ${CMAKE_CURRENT_BINARY_DIR}/airspy-tools/src/libusb-1.0.dll
  COPYONLY)
  endif()
 
  if (NOT DEFINED THREADS_PTHREADS_WIN32_LIBRARY)
  configure_file(
      ${CMAKE_CURRENT_BINARY_DIR}/../libs_win32/pthreadGC2.dll
-     ${CMAKE_CURRENT_BINARY_DIR}/airspy-tools/src/pthreadGC2.dll
  COPYONLY)
  endif()
 endif()
