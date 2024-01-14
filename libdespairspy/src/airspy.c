@@ -291,6 +291,9 @@ static inline void unpack_samples(uint32_t *input, uint16_t *output, int length)
 static
 void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer)
 {
+    uint16_t *input_samples;
+    int sample_count;
+
     airspy_device_t* device = (airspy_device_t*)usb_transfer->user_data;
 
     if (!device->streaming || device->stop_requested)
@@ -302,12 +305,20 @@ void airspy_libusb_transfer_callback(struct libusb_transfer* usb_transfer)
     {
         airspy_transfer_t transfer;
 
-        iqconverter_int16_process(&device->conv, (uint16_t *)usb_transfer->buffer,
-                device->buffer_size / sizeof(uint16_t));
+	if(device->packing_enabled) {
+	    sample_count = ((device->buffer_size / 2) * 4 ) / 3;
+	    unpack_samples((uint32_t *)usb_transfer->buffer, device->unpacked_samples, sample_count);
+	    input_samples = device->unpacked_samples;
+	} else {
+	    input_samples = usb_transfer->buffer;
+	    sample_count = device->buffer_size / 2;
+	}
 
-        transfer.samples = usb_transfer->buffer;
+        iqconverter_int16_process(&device->conv, (uint16_t *)input_samples, sample_count);
+
+        transfer.samples = input_samples;
         /* Samples are 2 bytes each, I/Q */
-        transfer.sample_count = device->buffer_size / (sizeof(uint16_t) * 2);
+        transfer.sample_count = sample_count;
 
         /* Call the RX callback */
         if (0 != device->callback(device, device->ctx, &transfer)) {
